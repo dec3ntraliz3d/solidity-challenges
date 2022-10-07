@@ -20,7 +20,7 @@ contract VestingVault is Ownable {
     mapping(address => bool) public tokenFunded;
     uint256 public ethReleased;
     uint64 public ethUnlockTimestamp;
-    uint64 public ethVestingStartTime;
+    uint64 public ethVaultStartTime;
     uint64 public ethVestingDurationSeconds;
     bool public ethFunded;
 
@@ -62,7 +62,7 @@ contract VestingVault is Ownable {
         if (_durationSeconds == 0) revert DurationCantBeZero();
         ethVestingDurationSeconds = _durationSeconds;
         ethUnlockTimestamp = _unlockTimestamp;
-        ethVestingStartTime = uint64(block.timestamp);
+        ethVaultStartTime = uint64(block.timestamp);
     }
 
     function withdrawToken(address _token, uint256 _amount) external {
@@ -90,8 +90,16 @@ contract VestingVault is Ownable {
         returns (uint256)
     {
         if (!tokenFunded[_token]) return 0;
+
         uint256 totalToken = IERC20(_token).balanceOf(address(this)) +
             tokenReleased[_token];
+
+        // If Vesting duration is complete. All token available for withdraw.
+        if (
+            block.timestamp - tokenVaultStartTime[_token] >=
+            tokenVestingDurationSeconds[_token]
+        ) return (totalToken - tokenReleased[_token]);
+
         return
             ((totalToken * (block.timestamp - tokenVaultStartTime[_token])) /
                 tokenVestingDurationSeconds[_token]) - tokenReleased[_token];
@@ -100,8 +108,13 @@ contract VestingVault is Ownable {
     function ethAvailableToWithdraw() public view returns (uint256) {
         if (!ethFunded) return 0;
         uint256 totalEth = address(this).balance + ethReleased;
+
+        // Vesting duration is complete. All eth available for withdraw.
+        if (block.timestamp - ethVaultStartTime >= ethVestingDurationSeconds)
+            return (totalEth - ethReleased);
+
         return
-            ((totalEth * (block.timestamp - ethVestingStartTime)) /
+            ((totalEth * (block.timestamp - ethVaultStartTime)) /
                 ethVestingDurationSeconds) - ethReleased;
     }
 }

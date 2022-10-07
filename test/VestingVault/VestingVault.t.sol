@@ -128,10 +128,12 @@ contract VestingVaultTest is Test {
             5 days //Total duration
         );
         vm.warp(block.timestamp + 7 days);
-        vm.prank(beneficiary);
+        vm.startPrank(beneficiary);
         // Should be able to withdraw all token after vesting period has completed.
-        vault.withdrawToken(address(token), 100 ether);
-        assertEq(token.balanceOf(beneficiary), 100 ether);
+        uint256 tokenAvailable = vault.tokenAvailableToWithdraw(address(token));
+        vault.withdrawToken(address(token), tokenAvailable);
+        assertEq(token.balanceOf(beneficiary), tokenAvailable);
+        vm.stopPrank();
     }
 
     function testWithdrawETHAfterVestingCliff() public {
@@ -156,10 +158,13 @@ contract VestingVaultTest is Test {
             5 days
         );
         vm.warp(block.timestamp + 7 days);
-        vm.prank(beneficiary);
+        uint256 ethAvailable = vault.ethAvailableToWithdraw();
+        vm.startPrank(beneficiary);
+        uint256 currentEthBalance = beneficiary.balance;
         // Should be able to withdraw all ETH after vesting period has completed.
-        vault.withdrawETH(10 ether);
-        assertEq(beneficiary.balance, 10 ether);
+        vault.withdrawETH(ethAvailable);
+        vm.stopPrank();
+        assertEq(beneficiary.balance, currentEthBalance + ethAvailable);
     }
 
     function testCannotWithdrawMoreTokenThanVested() public {
