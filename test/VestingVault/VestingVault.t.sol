@@ -29,7 +29,8 @@ contract VestingVaultTest is Test {
         );
 
         assertEq(token.balanceOf(address(vault)), 100 ether);
-        assert(vault.tokenFunded(address(token)));
+        (, , , , bool funded) = vault.tokenVaults(address(token));
+        assert(funded);
     }
 
     function testOwnerCanFundEth() public {
@@ -38,7 +39,8 @@ contract VestingVaultTest is Test {
             5 days
         );
         assertEq(address(vault).balance, 10 ether);
-        assert(vault.ethFunded());
+        (, , , , bool funded) = vault.ethVault();
+        assert(funded);
     }
 
     function testOneTimeTokenFunding() public {

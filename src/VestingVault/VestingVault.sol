@@ -13,16 +13,16 @@ import {IERC20} from "openzeppelin-contracts/interfaces/IERC20.sol";
 
 contract VestingVault is Ownable {
     address public immutable beneficiary;
-    mapping(address => uint256) public tokenReleased;
-    mapping(address => uint64) public tokenUnlockTimestamp;
-    mapping(address => uint64) public tokenVaultStartTime;
-    mapping(address => uint64) public tokenVestingDurationSeconds;
-    mapping(address => bool) public tokenFunded;
-    uint256 public ethReleased;
-    uint64 public ethUnlockTimestamp;
-    uint64 public ethVaultStartTime;
-    uint64 public ethVestingDurationSeconds;
-    bool public ethFunded;
+    mapping(address => VestingDetails) public tokenVaults;
+    VestingDetails public ethVault;
+
+    struct VestingDetails {
+        uint256 amountReleased;
+        uint64 unlockTime;
+        uint64 startTime;
+        uint64 duration;
+        bool funded;
+    }
 
     error AlreadyFunded();
     error NotBenificiary();
@@ -42,12 +42,12 @@ contract VestingVault is Ownable {
         uint64 _durationSeconds
     ) public onlyOwner {
         // Funding is an one time action.
-        if (tokenFunded[_token]) revert AlreadyFunded();
-        tokenFunded[_token] = true;
+        if (tokenVaults[_token].funded) revert AlreadyFunded();
+        tokenVaults[_token].funded = true;
         if (_durationSeconds == 0) revert DurationCantBeZero();
-        tokenVestingDurationSeconds[_token] = _durationSeconds;
-        tokenUnlockTimestamp[_token] = _unlockTimestamp;
-        tokenVaultStartTime[_token] = uint64(block.timestamp);
+        tokenVaults[_token].duration = _durationSeconds;
+        tokenVaults[_token].unlockTime = _unlockTimestamp;
+        tokenVaults[_token].startTime = uint64(block.timestamp);
         IERC20(_token).transferFrom(msg.sender, address(this), _amount);
     }
 
@@ -57,29 +57,30 @@ contract VestingVault is Ownable {
         onlyOwner
     {
         // Funding is an one time action.
-        if (ethFunded) revert AlreadyFunded();
-        ethFunded = true;
+        if (ethVault.funded) revert AlreadyFunded();
+        ethVault.funded = true;
         if (_durationSeconds == 0) revert DurationCantBeZero();
-        ethVestingDurationSeconds = _durationSeconds;
-        ethUnlockTimestamp = _unlockTimestamp;
-        ethVaultStartTime = uint64(block.timestamp);
+        ethVault.duration = _durationSeconds;
+        ethVault.unlockTime = _unlockTimestamp;
+        ethVault.startTime = uint64(block.timestamp);
     }
 
     function withdrawToken(address _token, uint256 _amount) external {
-        if (block.timestamp < tokenUnlockTimestamp[_token]) revert NotVested();
+        if (block.timestamp < tokenVaults[_token].unlockTime)
+            revert NotVested();
         if (msg.sender != beneficiary) revert NotBenificiary();
         if (_amount > tokenAvailableToWithdraw(_token))
             revert AmountGreaterThanAvailable();
-        tokenReleased[_token] += _amount;
+        tokenVaults[_token].amountReleased += _amount;
         IERC20(_token).transfer(msg.sender, _amount);
     }
 
     function withdrawETH(uint256 _amount) public {
-        if (block.timestamp < ethUnlockTimestamp) revert NotVested();
+        if (block.timestamp < ethVault.unlockTime) revert NotVested();
         if (msg.sender != beneficiary) revert NotBenificiary();
         if (_amount > ethAvailableToWithdraw())
             revert AmountGreaterThanAvailable();
-        ethReleased += _amount;
+        ethVault.amountReleased += _amount;
         (bool sent, ) = payable(msg.sender).call{value: _amount}("");
         if (!sent) revert ETHTransferFailed();
     }
@@ -89,32 +90,33 @@ contract VestingVault is Ownable {
         view
         returns (uint256)
     {
-        if (!tokenFunded[_token]) return 0;
+        if (!tokenVaults[_token].funded) return 0;
 
         uint256 totalToken = IERC20(_token).balanceOf(address(this)) +
-            tokenReleased[_token];
+            tokenVaults[_token].amountReleased;
 
         // If Vesting duration is complete. All token available for withdraw.
         if (
-            block.timestamp - tokenVaultStartTime[_token] >=
-            tokenVestingDurationSeconds[_token]
-        ) return (totalToken - tokenReleased[_token]);
+            block.timestamp - tokenVaults[_token].startTime >=
+            tokenVaults[_token].duration
+        ) return (totalToken - tokenVaults[_token].amountReleased);
 
         return
-            ((totalToken * (block.timestamp - tokenVaultStartTime[_token])) /
-                tokenVestingDurationSeconds[_token]) - tokenReleased[_token];
+            ((totalToken * (block.timestamp - tokenVaults[_token].startTime)) /
+                tokenVaults[_token].duration) -
+            tokenVaults[_token].amountReleased;
     }
 
     function ethAvailableToWithdraw() public view returns (uint256) {
-        if (!ethFunded) return 0;
-        uint256 totalEth = address(this).balance + ethReleased;
+        if (!ethVault.funded) return 0;
+        uint256 totalEth = address(this).balance + ethVault.amountReleased;
 
         // Vesting duration is complete. All eth available for withdraw.
-        if (block.timestamp - ethVaultStartTime >= ethVestingDurationSeconds)
-            return (totalEth - ethReleased);
+        if (block.timestamp - ethVault.startTime >= ethVault.duration)
+            return (totalEth - ethVault.amountReleased);
 
         return
-            ((totalEth * (block.timestamp - ethVaultStartTime)) /
-                ethVestingDurationSeconds) - ethReleased;
+            ((totalEth * (block.timestamp - ethVault.startTime)) /
+                ethVault.duration) - ethVault.amountReleased;
     }
 }
