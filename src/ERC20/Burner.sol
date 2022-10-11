@@ -8,7 +8,7 @@ import {Ownable} from "openzeppelin-contracts/access/Ownable.sol";
 /**
  * @title ERC20 FixedSupply, Burnable, Pausable, Transfer Tax
  * @dev This is an extension of Solmate ERC20 base contract with additional features -
- * pausable, transfer tax, fixed supply
+ * pausable, transfer tax, fixed supply. 3% tax on transfer which is sent to a treasury address.
  */
 
 contract Burner is ERC20, Pausable, Ownable {
