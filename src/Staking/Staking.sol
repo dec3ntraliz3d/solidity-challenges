@@ -5,6 +5,16 @@ pragma solidity ^0.8.13;
 import {Ownable} from "openzeppelin-contracts/access/Ownable.sol";
 import {IERC20} from "openzeppelin-contracts/interfaces/IERC20.sol";
 import {Pausable} from "openzeppelin-contracts/security/Pausable.sol";
+import {ISignatureTransfer} from "permit2/interfaces/ISignatureTransfer.sol";
+
+interface IPermit2 {
+    function permitTransferFrom(
+        ISignatureTransfer.PermitTransferFrom memory permit,
+        ISignatureTransfer.SignatureTransferDetails calldata transferDetails,
+        address owner,
+        bytes calldata signature
+    ) external;
+}
 
 contract Staking is Ownable, Pausable {
     IERC20 public immutable stakingToken;
@@ -16,6 +26,7 @@ contract Staking is Ownable, Pausable {
     uint256 public finishAt;
     uint256 public lastUpdatedAt;
     bool isRewardRateSet;
+    IPermit2 permit2;
     mapping(address => uint256) public balanceOf;
     mapping(address => uint256) rewardsEarned;
     mapping(address => uint256) rewardsPerTokenPaid;
@@ -27,6 +38,7 @@ contract Staking is Ownable, Pausable {
     error AmountGreaterThanAvailable();
     error AmountCantBeZero();
     error RewardRateAlreadySet();
+    error IncorrectTransferToAddress();
 
     modifier updateRewards(address _account) {
         // Calculate reward per token based on Reward rate and staked amount.
@@ -37,9 +49,14 @@ contract Staking is Ownable, Pausable {
         _;
     }
 
-    constructor(address _stakingToken, address _rewardToken) {
+    constructor(
+        address _stakingToken,
+        address _rewardToken,
+        address _permit2
+    ) {
         stakingToken = IERC20(_stakingToken);
         rewardToken = IERC20(_rewardToken);
+        permit2 = IPermit2(_permit2);
         _pause();
     }
 
@@ -77,6 +94,26 @@ contract Staking is Ownable, Pausable {
      * Update user_balance
      * Update total_supply
      */
+
+    function stakeWithPermit2(
+        ISignatureTransfer.PermitTransferFrom calldata permit,
+        ISignatureTransfer.SignatureTransferDetails calldata transferDetails,
+        bytes calldata signature
+    ) external whenNotPaused updateRewards(msg.sender) {
+        if (transferDetails.to != address(this))
+            revert IncorrectTransferToAddress();
+        uint256 _amount = transferDetails.requestedAmount;
+        if (_amount == 0) revert AmountCantBeZero();
+        permit2.permitTransferFrom(
+            permit,
+            transferDetails,
+            msg.sender,
+            signature
+        );
+        balanceOf[msg.sender] += _amount;
+        totalSupply += _amount;
+        emit Stake(msg.sender, _amount);
+    }
 
     function stake(uint256 _amount)
         external

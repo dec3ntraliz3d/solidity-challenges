@@ -56,7 +56,7 @@ contract FlashloanReceiverAave {
 
         // Do something with the flashloan
 
-        // Repay flashloan
+        // Repay flashloan by approving borrowed amount + flashloan fee
         for (uint8 i = 0; i < assets.length; i++) {
             IERC20(assets[i]).transferFrom(caller, address(this), premiums[i]);
             IERC20(assets[i]).approve(msg.sender, amounts[i] + premiums[i]);

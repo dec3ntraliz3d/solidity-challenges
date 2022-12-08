@@ -1,5 +1,8 @@
 ds-test/=lib/forge-std/lib/ds-test/src/
+forge-gas-snapshot/=lib/permit2/lib/forge-gas-snapshot/src/
 forge-std/=lib/forge-std/src/
 openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/
-aave-v2/=lib/protocol-v2/
+permit2/=lib/permit2/src/
+protocol-v2/=lib/protocol-v2/
 solmate/=lib/solmate/src/
+permit2-test/=lib/permit2/test/
